@@ -1161,9 +1161,22 @@ def preserve_runninghub_hidden_overrides(provider):
         provider[list_key] = current
     return provider
 
+def is_deprecated_openai_image_async_endpoint(value):
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        path = urllib.parse.urlsplit(text).path if re.match(r"^https?://", text, re.I) else text
+    except Exception:
+        path = text
+    path = path.rstrip("/").lower()
+    return path.endswith("/v1/images/generations/async") or path.endswith("/images/generations/async")
+
 def normalize_endpoint_override(value, label):
     endpoint = str(value or "").strip()
     if not endpoint:
+        return ""
+    if "文生图" in str(label or "") and is_deprecated_openai_image_async_endpoint(endpoint):
         return ""
     if len(endpoint) > 300 or re.search(r"\s", endpoint):
         raise HTTPException(status_code=400, detail=f"{label} 不合法，请填写类似 /v1/images/edits 的路径")
@@ -1191,6 +1204,8 @@ def apply_locked_recommended_model_rules(base_url="", grouped=None):
 def provider_endpoint_url(provider, key, default_path):
     base_url = str((provider or {}).get("base_url") or AI_BASE_URL).strip().rstrip("/")
     override = str((provider or {}).get(key) or "").strip()
+    if key == "image_generation_endpoint" and is_deprecated_openai_image_async_endpoint(override):
+        override = ""
     if override:
         if re.match(r"^https?://", override, re.I):
             return override.rstrip("/")
@@ -3580,7 +3595,7 @@ def api_headers(json_body=True, provider=None, model=""):
         api_key = AI_API_KEY
         if not api_key:
             raise HTTPException(status_code=400, detail="未配置 COMFLY_API_KEY，请在 API/.env 中填写。")
-    if provider and effective_protocol(provider, model) == "gemini":
+    if provider and effective_protocol(provider, model) == "gemini" and not is_apimart_provider(provider):
         headers = {"Accept": "application/json", "x-goog-api-key": api_key}
     else:
         headers = {"Accept": "application/json", "Authorization": bearer_auth_value(api_key)}
@@ -9480,6 +9495,35 @@ def apimart_size_resolution(size):
     best = min(common, key=lambda item: abs(ratio - item[0] / item[1]))
     return best[2], resolution
 
+def apimart_image_model_lc(model=""):
+    return str(model or "").strip().lower()
+
+def apimart_model_supports_official_fallback(model=""):
+    value = apimart_image_model_lc(model)
+    if not value or "official" in value or "lite" in value:
+        return False
+    return value in {
+        "gemini-2.5-flash-image-preview",
+        "gemini-3.1-flash-image-preview",
+        "gemini-3-pro-image-preview",
+        "nano-banana-ext",
+        "nano-banana-2-ext",
+        "nano-banana-pro-ext",
+    }
+
+def apimart_image_resolution_for_model(model="", resolution="1K"):
+    value = apimart_image_model_lc(model)
+    # APIMART 文档：Lite 与 Gemini 2.5 Nano Banana 系列仅支持 1K。
+    if "lite" in value or value in {
+        "gemini-2.5-flash-image-preview",
+        "gemini-2.5-flash-image-preview-official",
+        "nano-banana",
+        "nano-banana-ext",
+    }:
+        return "1K"
+    text = str(resolution or "1K").strip().upper()
+    return text if text in {"0.5K", "1K", "2K", "4K"} else "1K"
+
 VOLCENGINE_MIN_PIXELS = 3_686_400
 VOLCENGINE_MIN_EDGE = 1536
 VOLCENGINE_MAX_EDGE = 4096
@@ -9584,6 +9628,19 @@ def parse_error_payload_text(text):
     except Exception:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+def apimart_image_modalities_pricing_error(text):
+    raw = str(text or "")
+    lower = raw.lower()
+    if "image_modalities" not in lower:
+        return False
+    if "model_price_error" in lower:
+        return True
+    payload = parse_error_payload_text(raw)
+    error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    code = str(error.get("code") or payload.get("code") or "").strip().lower()
+    message = str(error.get("message") or payload.get("message") or "").strip().lower()
+    return code == "model_price_error" or ("precharge" in message and "pricing_mode" in message)
 
 def friendly_chat_error_detail(text, model="", provider=None):
     raw_text = str(text or "")
@@ -11086,12 +11143,18 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
                 "prompt": prompt,
                 "n": 1,
                 "size": apimart_size,
-                "resolution": str(resolution or "1k").upper(),
-                "official_fallback": False,
+                "resolution": apimart_image_resolution_for_model(model, resolution),
             }
             if image_refs:
                 body["image_urls"] = [reference_to_data_url(ref, max_size=1536) for ref in image_refs[:ONLINE_IMAGE_REFERENCE_MAX]]
             response = await client.post(gen_url, headers=api_headers(provider=provider, model=model), json=body)
+            if (
+                response.status_code >= 400
+                and apimart_image_modalities_pricing_error(response.text)
+                and apimart_model_supports_official_fallback(model)
+            ):
+                retry_body = {**body, "official_fallback": True}
+                response = await client.post(gen_url, headers=api_headers(provider=provider, model=model), json=retry_body)
         elif is_gpt2 and not image_refs and not mask_refs:
             body = {"model": model, "prompt": prompt, "size": size}
             if quality:
