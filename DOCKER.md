@@ -65,6 +65,44 @@ docker compose up -d --build   # 重建镜像，volume 里的数据不受影响
 在网页「设置 → ComfyUI」里填写你局域网地址（例如 `192.168.2.102:8188`）即可。
 容器默认走 bridge 网络，可访问宿主机所在局域网，一般无需额外网络配置。
 
+## 自动同步与自动构建（GitHub Actions）
+
+仓库已内置两份 GitHub Actions，实现「上游更新 → 自动同步 → 自动重新打包镜像」闭环：
+
+| Workflow | 作用 | 触发 |
+|----------|------|------|
+| `.github/workflows/sync-upstream.yml` | 每天北京时间 12:00 拉取 `hero8152/Infinite-Canvas` 的 `main`，自动 merge 并进本仓库 `main`；有冲突则自动开 issue 提醒 | 定时 + 手动 |
+| `.github/workflows/build.yml` | 构建镜像并推送到 `ghcr.io/22143966/infinite-canvas:latest`（外加 `:sha-xxxx` 短哈希标签） | 推送 main / PR / 手动 |
+
+由于 sync 把上游改动推回 `main`，会**自动触发 build** 重新出镜像——全程无需人工干预。
+
+### 首次必须手动开启（重要）
+
+fork 仓库的 Actions **默认是关闭的**，且定时任务默认不运行。请到 GitHub 仓库网页操作一次：
+
+1. **Settings → Actions → General → Workflow permissions** 改为 **Read and write permissions**（否则推送同步结果和推送 GHCR 都会失败）。
+2. **Actions 标签页** → 找到 `Sync Upstream` 与 `Build and Push Image` → 各点一次 **Enable workflow**。启用后定时同步才会按 cron 跑。
+
+### 怎么用自动构建出的镜像
+
+镜像默认推到 GHCR（私有）。在你要部署的机器上：
+
+```bash
+echo "$GHCR_TOKEN" | docker login ghcr.io -u 22143966 --password-stdin
+docker pull ghcr.io/22143966/infinite-canvas:latest
+```
+
+或把 `docker-compose.yml` 里的 `build: .` 整段换成这一行（ports / volumes 保持不变）：
+
+```yaml
+services:
+  infinite-canvas:
+    image: ghcr.io/22143966/infinite-canvas:latest
+    # ports / volumes 不变
+```
+
+> 想免登录公开拉取：在 GitHub **Packages** 页面将该 package 可见性设为 public。
+
 ## ⚠️ 许可证提示
 
 上游 LICENSE 为 restrict 协议：**禁止商业用途**；基于本代码二次开发**必须保持开源并注明作者**。
