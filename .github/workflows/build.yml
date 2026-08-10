@@ -14,7 +14,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/22143966/infinite-canvas
+  IMAGE_NAME: ghcr.io/22143966/infinite-canvas-docker
 
 jobs:
   build:
