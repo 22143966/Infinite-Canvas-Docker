@@ -1,17 +1,23 @@
 services:
   infinite-canvas:
     # Image is built & published to GHCR by GitHub Actions in THIS repo.
-    # Edit the default below to match your GitHub owner/repo (must be lowercase).
-    image: "${INFINITE_CANVAS_IMAGE:-ghcr.io/your-username/your-repo:latest}"
+    # Default below is already the real published image — runs out of the box.
+    image: "${INFINITE_CANVAS_IMAGE:-ghcr.io/22143966/infinite-canvas-docker:latest}"
     container_name: infinite-canvas
     restart: unless-stopped
     ports:
       - "${INFINITE_CANVAS_PORT:-13200}:3000"
     environment:
-      # Inside Docker, 127.0.0.1 means the container itself. Use host.docker.internal
-      # to reach ComfyUI running on the Docker host, or replace with a LAN IP.
-      COMFYUI_INSTANCES: "${COMFYUI_INSTANCES:-host.docker.internal:8188}"
+      # Backend default ComfyUI backend(s). Inside Docker, 127.0.0.1 = the container
+      # itself, so this MUST point to a reachable address:
+      #   - ComfyUI on the Docker host      -> host.docker.internal:8188
+      #   - ComfyUI on another LAN machine  -> its LAN IP, e.g. 192.168.2.102:8188
+      # You can also set/override this in the WebUI (Settings -> ComfyUI); the env
+      # here just pre-seeds the default so a fresh container works without typing it.
+      COMFYUI_INSTANCES: "${COMFYUI_INSTANCES:-192.168.2.102:8188}"
     extra_hosts:
+      # Lets the container reach the Docker host via host.docker.internal.
+      # Not needed when using a plain LAN IP above, but harmless to keep.
       - "host.docker.internal:host-gateway"
     volumes:
       - ./docker-data/API:/app/API
