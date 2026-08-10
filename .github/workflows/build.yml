@@ -74,3 +74,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Make image public (so it can be pulled without login)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PKG="${GITHUB_REPOSITORY,,}"
+          OWNER="${PKG%%/*}"
+          NAME="${PKG##*/}"
+          gh api -X PUT "/users/${OWNER}/packages/container/${NAME}/visibility" -f visibility=public
+        continue-on-error: true
