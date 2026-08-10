@@ -1,0 +1,28 @@
+# --- Bundled portable Python & offline package cache (NOT needed in the image) ---
+python/
+packages/
+get-pip.py
+
+# --- VCS / build noise ---
+.git/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# --- Platform launch scripts (the container uses `python3 main.py`) ---
+*.bat
+*.command
+run.sh
+mac-*.sh
+安装依赖.sh
+
+# --- Local data dirs (created at runtime; keep the image clean) ---
+data/
+output/
+assets/
+workflows/
+API/
+
+# --- Misc ---
+*.png
