@@ -6,10 +6,7 @@ services:
     restart: unless-stopped
     ports:
       - "13200:3000"
-    # ComfyUI address is configured in the WebUI (Settings -> ComfyUI),
-    # not here. From inside the container, use:
-    #   - ComfyUI on the Docker host      -> host.docker.internal:8188
-    #   - ComfyUI on another LAN machine  -> its LAN IP, e.g. 192.168.2.102:8188
+      
     volumes:
       - ./docker-data/API:/app/API
       - ./docker-data/assets:/app/assets
