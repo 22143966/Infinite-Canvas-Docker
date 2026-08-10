@@ -28,9 +28,7 @@
 ## 在你自己的仓库怎么用
 
 1. **把这个仓库内容上传到你自己的 GitHub 仓库**（解压后整目录上传，或 `git init` 后 push）。
-2. **改镜像名占位符**：把下面两处的 `your-username/your-repo` 换成**你自己的** GitHub 用户名 / 仓库名（GHCR 命名空间必须和仓库所有者一致，否则推送报权限错）：
-   - `.env.example` 里的 `INFINITE_CANVAS_IMAGE`
-   - `docker-compose.yml` 里 `image:` 行的默认值
+2. **（仅当你 fork 到别的账号时）改镜像名**：`docker-compose.yml` 里 `image:` 已写死本仓的 `ghcr.io/22143966/infinite-canvas-docker:latest`。若你 fork 到别的 owner，把这一行改成 `ghcr.io/<你的owner>/<你的仓库>:latest`（GHCR 命名空间必须和仓库所有者一致，否则推送报权限错）。
 3. **开 Actions 写权限**：仓库 **Settings → Actions → General → Workflow permissions** 改 **Read and write permissions**。
 4. **启用 workflow**：普通仓库默认启用；若没跑，去 **Actions** 标签页找 `Build & Push Infinite-Canvas` 点 **Enable workflow**。
 5. **手动跑一次首构建**：Actions 里 **Run workflow**，等几分钟出镜像。
@@ -39,14 +37,10 @@
 ## 部署（任意机器）
 
 ```bash
-# 1) 准备环境变量（可选，直接改默认值也行）
-cp .env.example .env
-#   编辑 .env：把 INFINITE_CANVAS_IMAGE 改成你的 ghcr.io/<你>/<仓库>:latest
-
-# 2) 启动（默认从 GHCR 拉镜像，无需本地 build）
+# 直接启动（从 GHCR 拉镜像，无需 .env、无需本地 build）
 docker compose up -d
 
-# 3) 浏览器打开
+# 浏览器打开
 #   http://<宿主机IP>:13200
 ```
 
@@ -54,12 +48,10 @@ docker compose up -d
 
 ## 接局域网 ComfyUI
 
-- 若 ComfyUI 跑在**同一台宿主机**上 Docker 外：`extra_hosts: host.docker.internal:host-gateway` 已配好，容器用 `host.docker.internal:8188` 就能访问。
-- 若 ComfyUI 在**另一台机器**（比如你的 `192.168.2.102:8188`）：在 `.env` 里设
-  ```
-  COMFYUI_INSTANCES=192.168.2.102:8188
-  ```
-  或在应用内「设置 → ComfyUI」直接填地址也行（应用自身配置优先）。
+- ComfyUI 地址**在应用内配置**：打开网页后「设置 → ComfyUI」直接填可达地址即可，无需改 compose：
+  - ComfyUI 在 **Docker 宿主机**上 → 填 `host.docker.internal:8188`
+  - ComfyUI 在 **另一台 LAN 机器**上（如 `192.168.2.102:8188`）→ 直接填该 LAN IP
+  - 注意：容器内 `127.0.0.1` 指的是容器自己，**别填** `127.0.0.1:8188`
 
 ## 同步上游 / 实时更新
 
