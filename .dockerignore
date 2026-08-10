@@ -1,28 +1,40 @@
-# --- Bundled portable Python & offline package cache (NOT needed in the image) ---
+.git
+.github
+.workflow
+.claude
+.gitnexus
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose.yml
+DOCKER.md
+tests/
+build/
+dist/
+*.spec
+
+# Windows portable runtime and offline wheels are not usable inside Linux images.
 python/
 packages/
 get-pip.py
-
-# --- VCS / build noise ---
-.git/
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-
-# --- Platform launch scripts (the container uses `python3 main.py`) ---
 *.bat
 *.command
-run.sh
-mac-*.sh
-安装依赖.sh
+docker-data/
 
-# --- Local data dirs (created at runtime; keep the image clean) ---
+# Runtime/user data. Persist these with docker-compose volumes instead.
+API/
+assets/
 data/
 output/
-assets/
-workflows/
-API/
-
-# --- Misc ---
-*.png
+history.json
+global_config.json
+_self_restart.*

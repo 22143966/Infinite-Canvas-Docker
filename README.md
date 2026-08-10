@@ -1,73 +1,72 @@
-# Infinite-Canvas
-Supports comfyui/API calls/modelscope calls
+# Infinite-Canvas Docker（独立打包仓）
 
-配套的chrome采集插件已经上线：https://chromewebstore.google.com/detail/infinite-canvas-%E5%9B%BE%E5%83%8F%E8%A7%86%E9%A2%91%E6%96%87%E5%AD%97%E6%8A%93%E5%8F%96%E5%B7%A5/ajfhnbklbmpfaaookhfakohabnpmlcic?authuser=0&hl=en
+把 [hero8152/Infinite-Canvas](https://github.com/hero8152/Infinite-Canvas)（一个支持局域网 ComfyUI / 工作流导入 / 数据服务端落盘的 AI 画图工作台）打包成 Docker 镜像，并**每天自动构建上游最新代码**，推送到 GitHub Container Registry (GHCR)。
 
-详细教程：[https://youtu.be/1y9ShTvgC_w](https://youtu.be/r_y_9ALr7fg)
+> 本仓库**不 fork** 上游。CI 每次直接拉取上游 `main` 当构建上下文，用本仓库维护的 `Dockerfile` / `docker-entrypoint.py` 打包。好处：永远是上游最新、零 merge 冲突、上游怎么改都不影响你。
 
-由于最近很多API网址关停，我找到一个稳定的网址：
+## 目录结构
 
-https://apib.ai/register?aff=1uyAbb （包含所有生图模型/视频模型/LLM模型）
+```
+.
+├── README.md
+├── Dockerfile                 # 基于 python:3.11-slim，跑 main.py（非 root + 健康检查）
+├── docker-entrypoint.py       # 运行时建目录、生成默认文件、history 软链、chown、降权
+├── docker-compose.yml         # 3000 端口 + 5 个数据卷 + ComfyUI 寻址（env 驱动）
+├── .dockerignore              # 排除便携 python/ 等，保证镜像干净
+├── .env.example               # 端口 / 镜像名 / ComfyUI 地址 示例
+└── .github/workflows/build.yml# 定时拉上游最新 → 构建 → 推 GHCR（amd64+arm64）
+```
 
-https://www.fhl.mom/register?aff=86L574B4T2N9  （包含codex和GPT image 2模型）
+## 这个镜像做了什么（相对裸跑）
 
-功能请求/功能更新/视频教程/联系我，都可以在B站评论或私信：https://space.bilibili.com/78652351
+- **非 root 运行**：容器内用 `appuser` 跑服务，更安全。
+- **健康检查**：每 30s 打 `/api/app-info`，异常自动标记 unhealthy。
+- **目录与权限自动处理**：`docker-entrypoint.py` 在启动时创建 `API/ data/ assets/ output/ workflows/custom/`、生成 `history.json` / `global_config.json` 默认值，并把 `/app/history.json` 软链到**已挂载的** `/app/data/history.json`——所以**重建容器也不会丢历史**（解决了纯卷挂载下顶层 history.json 丢失的老问题）。
+- **数据全部在宿主机**：`docker-data/` 下的 5 个目录对应容器 `/app` 下对应路径，画布 / 素材 / 生成结果 / 工作流 / 密钥都落盘，镜像本身无状态。
+- **多平台镜像**：同时构建 `linux/amd64` 和 `linux/arm64`（可在 NAS / Mac / 树莓派类 ARM 机器跑）。
 
+## 在你自己的仓库怎么用
 
-----
+1. **把这个仓库内容上传到你自己的 GitHub 仓库**（解压后整目录上传，或 `git init` 后 push）。
+2. **改镜像名占位符**：把下面两处的 `your-username/your-repo` 换成**你自己的** GitHub 用户名 / 仓库名（GHCR 命名空间必须和仓库所有者一致，否则推送报权限错）：
+   - `.env.example` 里的 `INFINITE_CANVAS_IMAGE`
+   - `docker-compose.yml` 里 `image:` 行的默认值
+3. **开 Actions 写权限**：仓库 **Settings → Actions → General → Workflow permissions** 改 **Read and write permissions**。
+4. **启用 workflow**：普通仓库默认启用；若没跑，去 **Actions** 标签页找 `Build & Push Infinite-Canvas` 点 **Enable workflow**。
+5. **手动跑一次首构建**：Actions 里 **Run workflow**，等几分钟出镜像。
+6. **（可选）GHCR 可见性**：镜像默认私有；想免登录拉取，去 GitHub **Packages** 把该镜像设为 **Public**。
 
-【新增了version文件，我每次更新都会更新version的版本号，如果你下载version文件，打开项目后，导航栏的GitHub按键就会提示新版本，如果不想查看更新提示，就删除version文件】
+## 部署（任意机器）
 
-【A version file has been added. I update the version number with each update. If you download the version file, the GitHub button in the navigation bar will indicate the new version after opening the project. If you don't want to see update notifications, delete the version file.】
+```bash
+# 1) 准备环境变量（可选，直接改默认值也行）
+cp .env.example .env
+#   编辑 .env：把 INFINITE_CANVAS_IMAGE 改成你的 ghcr.io/<你>/<仓库>:latest
 
-----
+# 2) 启动（默认从 GHCR 拉镜像，无需本地 build）
+docker compose up -d
 
-支持的功能：
-1. 支持几乎所有OpenAI协议的API/异步协议/Gemini协议/方舟协议
-2. RunningHub的工作流/AI应用/收费模型调用
-3. 火山引擎调用（人脸认证还在修复bug）
-4. Modelscope免费LLM模型和图像模型调用
-5. 即梦CLI调用，可直接调用即梦高级会员的积分，支持文生图/图生图/文生视频/图生视频
-6. 支持调用本地局域网的ComfyUI
-7. 扩展图片/360全景图预览截图/视频帧抽取/循环节点等诸多功能
-8. tools文件夹中，增加了chrome批量采集到素材库的插件，PS直连画布调用所有功能的插件
+# 3) 浏览器打开
+#   http://<宿主机IP>:13200
+```
 
---------
+首次启动会在当前目录生成 `docker-data/`，所有用户数据都在里面。
 
-已经申请著作权，禁止商业用途
+## 接局域网 ComfyUI
 
-Commercial use is prohibited.
+- 若 ComfyUI 跑在**同一台宿主机**上 Docker 外：`extra_hosts: host.docker.internal:host-gateway` 已配好，容器用 `host.docker.internal:8188` 就能访问。
+- 若 ComfyUI 在**另一台机器**（比如你的 `192.168.2.102:8188`）：在 `.env` 里设
+  ```
+  COMFYUI_INSTANCES=192.168.2.102:8188
+  ```
+  或在应用内「设置 → ComfyUI」直接填地址也行（应用自身配置优先）。
 
+## 同步上游 / 实时更新
 
-* 可以自己使用和公司使用，禁止用于任何形式的修改封装成商业产品，商用须取得授权。
+- 本仓的 `build.yml` 每天 **北京时间 12:00** 自动 `checkout` 上游最新 `main` 重新构建并推送 `latest` + `sha-xxxx` 标签。
+- 你部署机下次 `docker compose pull && docker compose up -d` 即拿到最新版；数据在 `docker-data/` 不受影响。
+- 想立刻更新：去 Actions 手动 **Run workflow** 触发一次构建，再在部署机 `pull`。
 
-* 根据代码二次开发的软件必须保持开源并注明来源作者
+## 许可证提示
 
-* This software is for personal and company use only, but is prohibited from being modified or packaged into commercial products in any way. Commercial use requires authorization.
-
-* Software developed based on this code must remain open source and the original author must be credited.
-
---------
-
-
-<img width="2079" height="665" alt="image" src="https://github.com/user-attachments/assets/8469923b-f7a2-403c-9c37-e6e789211f28" />
-
-<img width="1865" height="1503" alt="image" src="https://github.com/user-attachments/assets/f4030201-67c6-4845-b08b-b6fdf304afaa" />
-
-
-<img width="1696" height="1350" alt="b68e144c5b04a322bfd035da4d89aba3" src="https://github.com/user-attachments/assets/0a6090fb-a8dd-4c3d-adee-b1f9233a2d91" />
-
-   
-<img width="1525" height="1473" alt="image" src="https://github.com/user-attachments/assets/6f61fcf9-746c-425b-9e36-cfc8d252da7c" />
-
-   <img width="1261" height="864" alt="image" src="https://github.com/user-attachments/assets/57f3e230-3134-488f-8179-d97e7d15383a" />
-<img width="1530" height="858" alt="image" src="https://github.com/user-attachments/assets/9990e42d-22d5-4a10-a1e1-ad35a634edd2" />
-
-<img width="1735" height="1400" alt="image" src="https://github.com/user-attachments/assets/d8328ff8-bbe0-4f1c-9ffa-7b56e8a1a51d" />
-<img width="2258" height="969" alt="image" src="https://github.com/user-attachments/assets/4a752d99-885d-4ba9-8b86-91b495786b5c" />
-
-
-<img width="1531" height="1374" alt="image" src="https://github.com/user-attachments/assets/0af79e38-0955-4740-9e65-5c9bb057f58c" />
-
-<img width="2196" height="1040" alt="image" src="https://github.com/user-attachments/assets/6d823668-cde2-4836-8332-1858efe5f520" />
-<img width="2214" height="771" alt="image" src="https://github.com/user-attachments/assets/52e10958-753f-45ba-a50e-3bbec27be436" />
+上游 `hero8152/Infinite-Canvas` 为 restrictive 协议（禁止商用，二次开发须开源并注明作者，允许个人 / 公司自用）。本打包仓仅提供 Docker 构建配置，镜像内容版权归上游作者所有；公开推送镜像请保留署名与开源。

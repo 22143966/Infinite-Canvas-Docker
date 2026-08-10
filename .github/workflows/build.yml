@@ -1,53 +1,75 @@
-name: Build and Push Image
+name: Build & Push Infinite-Canvas
 
-# 触发：推送/合并到 main（上游同步进来会触发）、PR、手动
+# This repo does NOT fork hero8152/Infinite-Canvas. Instead it builds the
+# upstream project's LATEST main every run, so the published image is always
+# current with zero merge conflicts. The only files we own are the Dockerfile,
+# the entrypoint and this workflow.
+
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  schedule:
+    - cron: "0 4 * * *"        # daily at 04:00 UTC = 12:00 Beijing time
   workflow_dispatch:
+  push:
+    branches: [main]           # rebuild when you change Dockerfile/entrypoint
 
 permissions:
   contents: read
-  packages: write   # 推送到 GHCR 必须
+  packages: write
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ghcr.io/22143966/infinite-canvas-docker
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout this repo (our Dockerfile + entrypoint + workflow)
         uses: actions/checkout@v4
+
+      - name: Checkout upstream hero8152/Infinite-Canvas (latest main) as build context
+        uses: actions/checkout@v4
+        with:
+          repository: hero8152/Infinite-Canvas
+          ref: main
+          path: upstream
+
+      - name: Place our build files into the upstream context
+        # Our Dockerfile/entrypoint live in THIS repo; the upstream checkout has
+        # main.py + static frontend but no Dockerfile. Copy ours in and let our
+        # .dockerignore govern what gets baked into the image.
+        run: |
+          cp Dockerfile docker-entrypoint.py .dockerignore upstream/
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags & labels)
+      - name: Normalize image name (GHCR requires lowercase)
+        id: image
+        run: echo "name=${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Docker metadata / tags
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.image.outputs.name }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
             type=sha,format=short
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          push: ${{ github.event_name != 'pull_request' }}
+          context: ./upstream
+          file: ./upstream/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
