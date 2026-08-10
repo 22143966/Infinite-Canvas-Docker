@@ -1,7 +1,7 @@
 services:
   infinite-canvas:
-    build: .
-    image: infinite-canvas:latest
+    # 默认使用 GitHub Actions 自动构建并推送到 GHCR 的镜像
+    image: ghcr.io/22143966/infinite-canvas-docker:latest
     container_name: infinite-canvas
     restart: unless-stopped
     ports:
@@ -18,12 +18,16 @@ services:
       - ic-workflows:/app/workflows# ComfyUI 工作流
       - ic-api:/app/API            # API 密钥 (.env)
 
-    # ---- 想改成宿主机目录绑定？把上面 5 行换成： ----
+    # ---- 想改成宿主机目录绑定（直接落文件夹，方便备份）？把上面 5 行换成： ----
     #   - ./ic-data:/app/data
     #   - ./ic-output:/app/output
     #   - ./ic-assets:/app/assets
     #   - ./ic-workflows:/app/workflows
     #   - ./ic-api:/app/API
+    #
+    # ---- 想本地构建镜像（不走 GHCR）？把上面的 image: 行整段换成： ----
+    #   build: .
+    #   image: infinite-canvas:latest
 
 volumes:
   ic-data:
