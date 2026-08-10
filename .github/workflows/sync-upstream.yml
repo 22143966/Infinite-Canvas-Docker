@@ -1,0 +1,55 @@
+name: Sync Upstream
+
+# 触发：每天北京时间 12:00 自动、也可手动点
+on:
+  schedule:
+    - cron: "0 4 * * *"   # UTC 04:00 = 北京 12:00
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 推送同步结果必须
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream hero8152/Infinite-Canvas
+        id: sync
+        run: |
+          git remote add upstream https://github.com/hero8152/Infinite-Canvas.git || true
+          BASE=$(git rev-parse HEAD)
+          git fetch upstream main
+          if git merge upstream/main --no-edit; then
+            if [ "$(git rev-parse HEAD)" != "$BASE" ]; then
+              git push origin main
+              echo "result=updated" >> "$GITHUB_OUTPUT"
+            else
+              echo "result=uptodate" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on conflict
+        if: steps.sync.outputs.result == 'conflict'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: "⚠️ 上游同步冲突，需手动处理",
+              body: "上游 hero8152/Infinite-Canvas 有更新，但与本分支自动合并失败（很可能上游改动了我们改过的文件）。\n\n请在本机执行：\n```\ngit fetch upstream\ngit merge upstream/main\n# 解决冲突后\n git push origin main\n```\n\n触发时间：" + new Date().toISOString()
+            })
