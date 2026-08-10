@@ -1,0 +1,33 @@
+services:
+  infinite-canvas:
+    build: .
+    image: infinite-canvas:latest
+    container_name: infinite-canvas
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Optional: set your timezone so timestamps in logs/files match your locale
+      - TZ=Asia/Shanghai
+    volumes:
+      # All user data is persisted on the host via named volumes.
+      # Rebuild the image (docker compose build) without touching these.
+      - ic-data:/app/data          # 画布 / 对话 / 配置 JSON
+      - ic-output:/app/output      # 生成结果
+      - ic-assets:/app/assets      # 素材库 / 上传 / 输入
+      - ic-workflows:/app/workflows# ComfyUI 工作流
+      - ic-api:/app/API            # API 密钥 (.env)
+
+    # ---- 想改成宿主机目录绑定？把上面 5 行换成： ----
+    #   - ./ic-data:/app/data
+    #   - ./ic-output:/app/output
+    #   - ./ic-assets:/app/assets
+    #   - ./ic-workflows:/app/workflows
+    #   - ./ic-api:/app/API
+
+volumes:
+  ic-data:
+  ic-output:
+  ic-assets:
+  ic-workflows:
+  ic-api:
