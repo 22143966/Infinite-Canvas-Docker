@@ -72,7 +72,7 @@ docker compose up -d --build   # 重建镜像，volume 里的数据不受影响
 | Workflow | 作用 | 触发 |
 |----------|------|------|
 | `.github/workflows/sync-upstream.yml` | 每天北京时间 12:00 拉取 `hero8152/Infinite-Canvas` 的 `main`，自动 merge 并进本仓库 `main`；有冲突则自动开 issue 提醒 | 定时 + 手动 |
-| `.github/workflows/build.yml` | 构建镜像并推送到 `ghcr.io/22143966/infinite-canvas:latest`（外加 `:sha-xxxx` 短哈希标签） | 推送 main / PR / 手动 |
+| `.github/workflows/build.yml` | 构建镜像并推送到 `ghcr.io/22143966/infinite-canvas-docker:latest`（外加 `:sha-xxxx` 短哈希标签） | 推送 main / PR / 手动 |
 
 由于 sync 把上游改动推回 `main`，会**自动触发 build** 重新出镜像——全程无需人工干预。
 
@@ -89,7 +89,7 @@ fork 仓库的 Actions **默认是关闭的**，且定时任务默认不运行�
 
 ```bash
 echo "$GHCR_TOKEN" | docker login ghcr.io -u 22143966 --password-stdin
-docker pull ghcr.io/22143966/infinite-canvas:latest
+docker pull ghcr.io/22143966/infinite-canvas-docker:latest
 ```
 
 或把 `docker-compose.yml` 里的 `build: .` 整段换成这一行（ports / volumes 保持不变）：
@@ -97,7 +97,7 @@ docker pull ghcr.io/22143966/infinite-canvas:latest
 ```yaml
 services:
   infinite-canvas:
-    image: ghcr.io/22143966/infinite-canvas:latest
+    image: ghcr.io/22143966/infinite-canvas-docker:latest
     # ports / volumes 不变
 ```
 
